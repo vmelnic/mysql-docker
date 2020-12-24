@@ -1,0 +1,9 @@
+.DS_Store
+docker/.DS_Store
+provision/.DS_Store
+.idea/
+.env
+docker/mysql/storage/mysql/*
+!docker/mysql/storage/mysql/.gitkeep
+docker/mysql/storage/backups/*
+!docker/mysql/storage/backups/.gitkeep

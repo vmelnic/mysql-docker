@@ -1,0 +1,228 @@
+#
+# File: mysql-database.yml
+# Description: Create MySQL database provision.
+#
+---
+
+- name: "*** MySQL database playbook"
+  hosts: "*"
+  remote_user: "*"
+
+  #
+  # Variables
+  #
+  vars:
+    # Mandatory variables.
+    - mysql_db_name: "{{ name }}"
+
+    # Optional variables.
+    - mysql_db_user: "{{ user | default(name) }}"
+
+    # Mixed or default variables.
+    - mysql_root_pass_file: "/var/lib/mysql/.mysql.root.password"
+    - mysql_user_pass_file: "/var/lib/mysql/.mysql.{{ name }}.password"
+    - mysql_db_hosts:
+        - '127.0.0.1'
+        - 'localhost'
+        - '::1'
+        - '%'
+        - '{{ ansible_hostname }}'
+    - mysql_db_file: "/var/backups/{{ mysql_db_name }}.sql.bz2"
+
+  #
+  # Tasks
+  #
+  tasks:
+    - name: "Check MySQL root password."
+      stat: path={{ mysql_root_pass_file }}
+      register: mysql_root_pass_file_exist
+      become: yes
+      tags:
+        - always
+
+    - name: "Fetch MySQL root password."
+      shell: "cat {{ mysql_root_pass_file }}"
+      register: mysq_root_password
+      when: mysql_root_pass_file_exist.stat.exists == True
+      become: yes
+      tags:
+        - always
+
+    # Create database.
+
+    - name: "Check user MySQL password."
+      stat: path={{ mysql_user_pass_file }}
+      register: db_pass_file_exist
+      become: yes
+      tags:
+        - create
+
+    - name: "Generate user password."
+      lineinfile: dest="{{ mysql_user_pass_file }}"
+                  line="{{ lookup('pipe', 'openssl rand -hex 10') }}"
+                  create=yes
+                  state=present
+      when: db_pass_file_exist.stat.exists == False
+      become: yes
+      tags:
+        - create
+
+    - name: "Check user MySQL password."
+      stat: path={{ mysql_user_pass_file }}
+      register: db_pass_file_exist
+      become: yes
+      tags:
+        - create
+
+    - name: "Fetch mysql user password."
+      shell: "cat {{ mysql_user_pass_file }}"
+      register: mysql_user_password
+      when: db_pass_file_exist.stat.exists == True
+      become: yes
+      tags:
+        - create
+
+    - name: "Create databases."
+      mysql_db: name={{ mysql_db_name }}
+                login_user=root
+                login_password={{ mysq_root_password.stdout }}
+                state=present
+      when: db_pass_file_exist.stat.exists == True
+      tags:
+        - create
+
+    - name: "Grant user permissions."
+      mysql_user: name={{ mysql_db_user }}
+                  host={{ item }}
+                  priv={{ mysql_db_name }}.*:ALL
+                  append_privs=yes
+                  password={{ mysql_user_password.stdout }}
+                  login_user=root
+                  login_password={{ mysq_root_password.stdout }}
+                  state=present
+      with_items:
+        - "{{ mysql_db_hosts }}"
+      when: db_pass_file_exist.stat.exists == True
+      tags:
+        - create
+
+    # Delete database.
+
+    - name: "Check user MySQL password."
+      stat: path={{ mysql_user_pass_file }}
+      register: db_pass_file_exist
+      become: yes
+      tags:
+        - delete
+
+    - name: "Delete user database."
+      mysql_db: name={{ mysql_db_name }}
+                login_user=root
+                login_password={{ mysq_root_password.stdout }}
+                state=absent
+      when: db_pass_file_exist.stat.exists == True
+      tags:
+        - delete
+
+    - name: "Delete user privileges."
+      mysql_user: name={{ mysql_db_user }}
+                  host_all=yes
+                  login_user=root
+                  login_password={{ mysq_root_password.stdout }}
+                  state=absent
+      when: db_pass_file_exist.stat.exists == True
+      tags:
+        - delete
+
+    - name: "Delete user password file."
+      file: path={{ mysql_user_pass_file }} state=absent
+      when: db_pass_file_exist.stat.exists == True
+      become: yes
+      tags:
+        - delete
+
+    # Backup database.
+
+    - name: "Check user MySQL password."
+      stat: path={{ mysql_user_pass_file }}
+      register: db_pass_file_exist
+      become: yes
+      tags:
+        - backup
+
+    - name: "Backup user database."
+      mysql_db: name={{ mysql_db_name }}
+                state=dump
+                target="{{ mysql_db_file }}"
+                login_user=root
+                login_password={{ mysq_root_password.stdout }}
+      when: db_pass_file_exist.stat.exists == True and db_pass_file_exist.stat.exists == True
+      tags:
+        - backup
+
+    # Restore database.
+
+    - name: "Check user MySQL password."
+      stat: path={{ mysql_user_pass_file }}
+      register: db_pass_file_exist
+      become: yes
+      tags:
+        - rollback
+
+    - name: "Check for database backup file."
+      stat: path="{{ mysql_db_file }}"
+      register: mysql_db_file_exist
+      become: yes
+      tags:
+        - rollback
+
+    - name: "Delete user database."
+      mysql_db: name={{ mysql_db_name }}
+                state=absent
+                login_user=root
+                login_password={{ mysq_root_password.stdout }}
+      when: db_pass_file_exist.stat.exists == True and mysql_db_file_exist.stat.exists == True
+      tags:
+        - rollback
+
+    - name: "Create databases."
+      mysql_db: name={{ mysql_db_name }}
+                login_user=root
+                login_password={{ mysq_root_password.stdout }}
+                state=present
+      when: db_pass_file_exist.stat.exists == True and mysql_db_file_exist.stat.exists == True
+      tags:
+        - rollback
+
+    - name: "Fetch mysql user password."
+      shell: "cat {{ mysql_user_pass_file }}"
+      register: mysql_user_password
+      when: db_pass_file_exist.stat.exists == True and mysql_db_file_exist.stat.exists == True
+      become: yes
+      tags:
+        - rollback
+
+    - name: "Grant user permissions."
+      mysql_user: name={{ mysql_db_user }}
+                  host={{ item }}
+                  priv={{ mysql_db_name }}.*:ALL
+                  append_privs=yes
+                  password={{ mysql_user_password.stdout }}
+                  state=present
+                  login_user=root
+                  login_password={{ mysq_root_password.stdout }}
+      with_items:
+        - "{{ mysql_db_hosts }}"
+      when: db_pass_file_exist.stat.exists == True and mysql_db_file_exist.stat.exists == True
+      tags:
+        - rollback
+
+    - name: "Restore user database."
+      mysql_db: name={{ mysql_db_name }}
+                state=import
+                target="{{ mysql_db_file }}"
+                login_user=root
+                login_password={{ mysq_root_password.stdout }}
+      when: db_pass_file_exist.stat.exists == True and mysql_db_file_exist.stat.exists == True
+      tags:
+        - rollback

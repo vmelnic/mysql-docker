@@ -1,0 +1,25 @@
+#
+# Docker based environment.
+#
+---
+
+version: '3.7'
+
+services:
+  mysql:
+    container_name: 'mysql'
+    hostname: 'db'
+    build:
+      context: './docker/mysql'
+      target: 'mysql'
+      args:
+        - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+    volumes:
+      - ./docker/mysql/provision:/var/provision
+      - ./docker/mysql/storage/mysql:/var/lib/mysql
+      - ./docker/mysql/storage/backups:/var/backups
+    ports:
+      - 9360:3306
+      - 9361:33060
