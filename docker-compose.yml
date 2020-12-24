@@ -5,6 +5,11 @@
 
 version: '3.7'
 
+networks:
+  docker-network:
+    name: docker-network
+    driver: bridge
+
 services:
   mysql:
     container_name: 'mysql'
@@ -23,3 +28,5 @@ services:
     ports:
       - 9360:3306
       - 9361:33060
+    networks:
+      - 'docker-network'
