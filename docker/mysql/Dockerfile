@@ -2,7 +2,7 @@
 # MySQL database docker environment setup.
 #
 
-FROM mysql:5.7 as mysql
+FROM mysql/mysql-server:8.0.23 as mysql
 
 COPY ./provision/playbooks/database.yml /var/provision/playbooks/database.yml
 COPY init-script.sh /docker-entrypoint-initdb.d/

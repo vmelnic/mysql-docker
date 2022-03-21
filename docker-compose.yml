@@ -14,11 +14,7 @@ services:
   mysql:
     container_name: 'mysql'
     hostname: 'db'
-    build:
-      context: './docker/mysql'
-      target: 'mysql'
-      args:
-        - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+    image: mysql/mysql-server:8.0.23
     environment:
       - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
     volumes:
@@ -27,6 +23,5 @@ services:
       - ./docker/mysql/storage/backups:/var/backups
     ports:
       - 9360:3306
-      - 9361:33060
     networks:
       - 'docker-network'
